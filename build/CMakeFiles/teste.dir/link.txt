@@ -1,0 +1,1 @@
+/usr/bin/cc -Wl,--dependency-file=CMakeFiles/teste.dir/link.d CMakeFiles/teste.dir/RoundRobinV1.c.o -o teste

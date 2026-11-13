@@ -1,0 +1,3 @@
+/home/turossi/Projetos/Feevas/Sistemas Operacionais/RoundRobin/build/CMakeFiles/teste.dir
+/home/turossi/Projetos/Feevas/Sistemas Operacionais/RoundRobin/build/CMakeFiles/edit_cache.dir
+/home/turossi/Projetos/Feevas/Sistemas Operacionais/RoundRobin/build/CMakeFiles/rebuild_cache.dir
