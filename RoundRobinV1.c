@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 
 typedef struct {
@@ -99,22 +100,45 @@ void removerProcessoDaLista(No* *inicio, int pid) {
 }
 
 
+
+void inicializarProcessos(int quantidadeDeProcessos, No* *filaAAdicionar, int *pidCount) {
+    for (int i = 0; i < quantidadeDeProcessos; i++) {
+        (*pidCount)++;
+        Processo novoProcesso = {*pidCount, 5, 0, 0, 1};
+
+        inserirProcesso(filaAAdicionar, novoProcesso);
+    }
+}
+
 int main () {
     // coloquei esse print só pra separar os comandos do meu console
     printf("\n-- RoundRobin iniciado --\n");
 
-    No *lista = NULL;
-    Processo p1 = {1, 5, 0, 0, 1};
-    Processo p2 = {3, 5, 0, 0, 1};
-    Processo p3 = {4, 5, 0, 0, 1};
+    int pidCounter = -1;
+    int quantum = 3;
+    int timer = 0;
 
-    inserirProcesso(&lista, p1);
-    inserirProcesso(&lista, p2);
-    inserirProcesso(&lista, p3);
+    // inicializar as listas/filas
+    No *listaAlta = NULL;
+    No *listaBaixa = NULL;
+    No *listaIO = NULL;
 
-    printf("--= PROCESSOS =--\n");
-    imprimirLista(lista);
+    inicializarProcessos(5, &listaAlta, &pidCounter);
 
-    removerProcessoDaLista(&lista, 2);
-    imprimirLista(lista);
+    // printf("--= PROCESSOS =--\n");
+    // imprimirLista(listaAlta);
+
+    // removerProcessoDaLista(&listaAlta, 2);
+    // imprimirLista(listaAlta);
+
+    bool existemProcessosNaoFinalizados = true;
+    while(existemProcessosNaoFinalizados) {
+
+
+        if (listaAlta == NULL &&
+            listaBaixa == NULL &&
+            listaIO == NULL) {
+            existemProcessosNaoFinalizados = false;
+        }
+    }
 }
