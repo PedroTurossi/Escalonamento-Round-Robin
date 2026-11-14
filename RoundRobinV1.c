@@ -3,11 +3,19 @@
 #include <stdbool.h>
 
 
+typedef enum {
+    NENHUM,
+    DISCO,
+    FITA,
+    IMPRESSORA,
+} TipoIO;
+
 typedef struct {
     int pid;
     int tempoRestante;
     int tempoIO;
     int tempoAteIO;
+    TipoIO proximoIO;
     // int prioridade;
     int status;
 } Processo;
@@ -104,6 +112,22 @@ void removerProcessoDaLista(No* *inicio, int pid) {
 void inicializarProcessos(int quantidadeDeProcessos, No* *filaAAdicionar, int *pidCount) {
     for (int i = 0; i < quantidadeDeProcessos; i++) {
         (*pidCount)++;
+        TipoIO proximoIO;
+        int sorteio = rand() % 4;
+        switch (sorteio) {
+            case 0:
+                proximoIO = NENHUM;
+                break;
+            case 1:
+                proximoIO = DISCO;
+                break;
+            case 2:
+                proximoIO = FITA;
+                break;
+            case 3:
+                proximoIO = IMPRESSORA;
+                break;
+        }
         Processo novoProcesso = {*pidCount, 5, 0, 0, 1};
 
         inserirProcesso(filaAAdicionar, novoProcesso);
@@ -133,6 +157,42 @@ int main () {
 
     bool existemProcessosNaoFinalizados = true;
     while(existemProcessosNaoFinalizados) {
+        No *tempIO = listaIO;
+        while(tempIO != NULL) {
+            tempIO->processo.tempoIO -= quantum;
+            printf("[%dms] - I/O PID(%d) {processo.ProximoIO}", timer, tempIO->processo.pid);
+
+            if (tempIO->processo.tempoIO <= 0) {
+                // não tem nenhum prin especifico que mostra que o IO foi finalizado durante meio quantum
+                // só pra avisar mesmo
+                switch(tempIO->processo.proximoIO) {
+                    case DISCO:
+                        inserirProcesso(&listaBaixa, tempIO->processo);
+                        removerProcessoDaLista(&listaIO, tempIO->processo.pid);
+                        break;
+                    case FITA:
+                        inserirProcesso(&listaAlta, tempIO->processo);
+                        removerProcessoDaLista(&listaIO, tempIO->processo.pid);
+                        break;
+                    case IMPRESSORA:
+                        inserirProcesso(&listaAlta, tempIO->processo);
+                        removerProcessoDaLista(&listaIO, tempIO->processo.pid);
+                        break;
+                }
+
+                printf("[%dms] !- I/O FINALIZADO PID(%d) {%d}", timer, tempIO->processo.pid, tempIO->processo.proximoIO);
+                // depois, tem que definir o que os números dos status significam
+                // ou fazem um enum deles também, talvez seria melhor pra ler o código
+                tempIO->processo.status = 0;
+            }
+
+        }
+
+
+        No *tempAlta = listaAlta;
+        while(tempAlta != NULL) {
+
+        }
 
 
         if (listaAlta == NULL &&
