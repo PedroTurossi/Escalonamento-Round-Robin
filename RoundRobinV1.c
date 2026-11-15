@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <time.h>
 
 
 typedef enum {
@@ -107,6 +108,39 @@ void removerProcessoDaLista(No* *inicio, int pid) {
     }
 }
 
+void executarProcesso(Processo* processo, No* *lista, No* *listaIO, int quantum, int *timer) {
+    int diferencaDeTempoAteIO =  (*processo).tempoAteIO - quantum;
+    if ((*processo).tempoAteIO <= 0) {
+        (*processo).status = 4; // aqui seria o Status BLOQUEADO
+        int tempoAdicionado = quantum + diferencaDeTempoAteIO;
+        *timer += tempoAdicionado;
+
+        printf("[%dms] - PID(%d) pediu acesso no I/O (IO?) depois de %d unidades\n", *timer, (*processo).pid, tempoAdicionado);
+        inserirProcesso(listaIO, *processo);
+        removerProcessoDaLista(lista, (*processo).pid);
+        return;
+    } else {
+        (*processo).tempoAteIO -= quantum;
+    }
+
+    (*processo).tempoRestante -= quantum;
+
+    int tempoAdicionado = 0;
+    if ((*processo).tempoRestante < 0) {
+        tempoAdicionado += quantum + (*processo).tempoRestante;
+    }  else {
+        tempoAdicionado += quantum;
+    }
+    printf("[%dms] - exec PID(%d) por %d unidades\n", *timer, (*processo).pid, tempoAdicionado);
+    *timer += tempoAdicionado;
+
+    if ((*processo).tempoRestante <= 0) {
+        // status finalizado
+        removerProcessoDaLista(&(*lista), (*processo).pid);
+    } else {
+        // registrar preemptação
+    }
+}
 
 
 void inicializarProcessos(int quantidadeDeProcessos, No* *filaAAdicionar, int *pidCount) {
@@ -157,41 +191,50 @@ int main () {
 
     bool existemProcessosNaoFinalizados = true;
     while(existemProcessosNaoFinalizados) {
-        No *tempIO = listaIO;
-        while(tempIO != NULL) {
-            tempIO->processo.tempoIO -= quantum;
-            printf("[%dms] - I/O PID(%d) {processo.ProximoIO}", timer, tempIO->processo.pid);
+        No* *tempIO = &listaIO;
+        while(*tempIO != NULL) {
+            (*tempIO)->processo.tempoIO -= quantum;
+            printf("[%dms] - I/O PID(%d) {processo.ProximoIO}\n", timer, (*tempIO)->processo.pid);
 
-            if (tempIO->processo.tempoIO <= 0) {
+            if ((*tempIO)->processo.tempoIO <= 0) {
                 // não tem nenhum prin especifico que mostra que o IO foi finalizado durante meio quantum
                 // só pra avisar mesmo
-                switch(tempIO->processo.proximoIO) {
+                switch((*tempIO)->processo.proximoIO) {
                     case DISCO:
-                        inserirProcesso(&listaBaixa, tempIO->processo);
-                        removerProcessoDaLista(&listaIO, tempIO->processo.pid);
+                        inserirProcesso(&listaBaixa, (*tempIO)->processo);
+                        removerProcessoDaLista(&listaIO, (*tempIO)->processo.pid);
                         break;
                     case FITA:
-                        inserirProcesso(&listaAlta, tempIO->processo);
-                        removerProcessoDaLista(&listaIO, tempIO->processo.pid);
+                        inserirProcesso(&listaAlta, (*tempIO)->processo);
+                        removerProcessoDaLista(&listaIO, (*tempIO)->processo.pid);
                         break;
                     case IMPRESSORA:
-                        inserirProcesso(&listaAlta, tempIO->processo);
-                        removerProcessoDaLista(&listaIO, tempIO->processo.pid);
+                        inserirProcesso(&listaAlta, (*tempIO)->processo);
+                        removerProcessoDaLista(&listaIO, (*tempIO)->processo.pid);
                         break;
                 }
 
-                printf("[%dms] !- I/O FINALIZADO PID(%d) {%d}", timer, tempIO->processo.pid, tempIO->processo.proximoIO);
+                printf("[%dms] !- I/O FINALIZADO PID(%d) {%d}", timer, (*tempIO)->processo.pid, (*tempIO)->processo.proximoIO);
                 // depois, tem que definir o que os números dos status significam
                 // ou fazem um enum deles também, talvez seria melhor pra ler o código
-                tempIO->processo.status = 0;
+                (*tempIO)->processo.status = 0;
             }
-
+            tempIO = &((*tempIO)->proximo);
         }
 
 
         No *tempAlta = listaAlta;
         while(tempAlta != NULL) {
+            executarProcesso(&(tempAlta->processo), &listaAlta, &listaIO, quantum, &timer);
+            tempAlta = tempAlta->proximo;
+        }
 
+        if (listaAlta == NULL) {
+            No *tempBaixa = listaBaixa;
+            while(tempBaixa != NULL) {
+                executarProcesso(&(tempBaixa->processo), &listaBaixa, &listaIO, quantum, &timer);
+                tempBaixa = tempBaixa->proximo;
+            }
         }
 
 
