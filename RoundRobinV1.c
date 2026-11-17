@@ -11,6 +11,14 @@ typedef enum {
     IMPRESSORA,
 } TipoIO;
 
+typedef enum {
+    NOVO,
+    PRONTO,
+    EXECUTANDO,
+    BLOQUEADO,
+    FINALIZADO,
+} Status;
+
 typedef struct {
     int pid;
     int tempoRestante;
@@ -18,7 +26,7 @@ typedef struct {
     int tempoAteIO;
     TipoIO proximoIO;
     // int prioridade;
-    int status;
+    Status status;
 } Processo;
 
 void imprimirProcesso(Processo *p) {
@@ -110,12 +118,27 @@ void removerProcessoDaLista(No* *inicio, int pid) {
 
 void executarProcesso(Processo* processo, No* *lista, No* *listaIO, int quantum, int *timer) {
     int diferencaDeTempoAteIO =  (*processo).tempoAteIO - quantum;
-    if ((*processo).tempoAteIO <= 0) {
-        (*processo).status = 4; // aqui seria o Status BLOQUEADO
-        int tempoAdicionado = quantum + diferencaDeTempoAteIO;
-        *timer += tempoAdicionado;
+    // printf(
+    //     "DEBUG PID(%d): TipoIO=%d | tempoAteIO=%d | diferenca=%d\n",
+    //     processo->pid,
+    //     processo->proximoIO,
+    //     processo->tempoAteIO,
+    //     diferencaDeTempoAteIO
+    // );
 
-        printf("[%dms] - PID(%d) pediu acesso no I/O (IO?) depois de %d unidades\n", *timer, (*processo).pid, tempoAdicionado);
+    if (diferencaDeTempoAteIO <= 0  &&  (*processo).proximoIO != NENHUM) {
+
+        (*processo).status = BLOQUEADO;
+        int tempoAdicionado = quantum + diferencaDeTempoAteIO;
+        (*timer) += tempoAdicionado;
+        (*processo).tempoRestante -= tempoAdicionado;
+
+        printf("[%dms] - PID(%d) pediu acesso no I/O (%d) depois de %d unidades\n",
+            (*timer),
+            (*processo).pid,
+            (*processo).proximoIO,
+            // TipoIONomes[(*processo).proximoIO],
+            tempoAdicionado);
         inserirProcesso(listaIO, *processo);
         removerProcessoDaLista(lista, (*processo).pid);
         return;
@@ -126,21 +149,23 @@ void executarProcesso(Processo* processo, No* *lista, No* *listaIO, int quantum,
     (*processo).tempoRestante -= quantum;
 
     int tempoAdicionado = 0;
-    if ((*processo).tempoRestante < 0) {
+    if ((*processo).tempoRestante <= 0) {
         tempoAdicionado += quantum + (*processo).tempoRestante;
     }  else {
         tempoAdicionado += quantum;
     }
-    printf("[%dms] - exec PID(%d) por %d unidades\n", *timer, (*processo).pid, tempoAdicionado);
-    *timer += tempoAdicionado;
+    printf("[%dms] - exec PID(%d) por %d unidades\n", (*timer), (*processo).pid, tempoAdicionado);
+    (*timer) += tempoAdicionado;
 
     if ((*processo).tempoRestante <= 0) {
-        // status finalizado
-        removerProcessoDaLista(&(*lista), (*processo).pid);
+        (*processo).status = FINALIZADO;
+        removerProcessoDaLista(lista, (*processo).pid);
     } else {
         // registrar preemptação
     }
 }
+
+
 
 
 void inicializarProcessos(int quantidadeDeProcessos, No* *filaAAdicionar, int *pidCount) {
@@ -162,7 +187,14 @@ void inicializarProcessos(int quantidadeDeProcessos, No* *filaAAdicionar, int *p
                 proximoIO = IMPRESSORA;
                 break;
         }
-        Processo novoProcesso = {*pidCount, 5, 0, 0, 1};
+
+        // aqui tem os valores aleatórios chaves pra esse projeto
+        int sorteioTempo = 2 + rand() % 14;
+        int sorteioTempoAteIO = 1 + rand() % (sorteioTempo - 1);
+        int sorteioTempoIO = 2 + rand() % 8;
+
+
+        Processo novoProcesso = {*pidCount, sorteioTempo, sorteioTempoIO, sorteioTempoAteIO, proximoIO, NOVO};
 
         inserirProcesso(filaAAdicionar, novoProcesso);
     }
@@ -171,6 +203,20 @@ void inicializarProcessos(int quantidadeDeProcessos, No* *filaAAdicionar, int *p
 int main () {
     // coloquei esse print só pra separar os comandos do meu console
     printf("\n-- RoundRobin iniciado --\n");
+    const char* TipoIONomes[] = {
+        "NENHUM",
+        "DISCO",
+        "FITA",
+        "IMPRESSORA"
+    };
+    const char* StatusEmString[] = {
+        "NOVO",
+        "PRONTO",
+        "EXECUTANDO",
+        "BLOQUEADO",
+        "FINALIZADO"
+    };
+
 
     int pidCounter = -1;
     int quantum = 3;
@@ -192,48 +238,60 @@ int main () {
     bool existemProcessosNaoFinalizados = true;
     while(existemProcessosNaoFinalizados) {
         No* *tempIO = &listaIO;
-        while(*tempIO != NULL) {
-            (*tempIO)->processo.tempoIO -= quantum;
-            printf("[%dms] - I/O PID(%d) {processo.ProximoIO}\n", timer, (*tempIO)->processo.pid);
 
-            if ((*tempIO)->processo.tempoIO <= 0) {
-                // não tem nenhum prin especifico que mostra que o IO foi finalizado durante meio quantum
+        while(*tempIO != NULL) {
+            No *noProcessoAtual = *tempIO;
+
+            noProcessoAtual->processo.tempoIO -= quantum;
+            printf("[%dms] - I/O PID(%d) {%s}\n",
+                timer,
+                noProcessoAtual->processo.pid,
+                TipoIONomes[noProcessoAtual->processo.proximoIO]);
+
+            if (noProcessoAtual->processo.tempoIO <= 0) {
+                // não tem nenhum print especifico que mostra que o IO foi finalizado durante meio quantum
                 // só pra avisar mesmo
-                switch((*tempIO)->processo.proximoIO) {
-                    case DISCO:
-                        inserirProcesso(&listaBaixa, (*tempIO)->processo);
-                        removerProcessoDaLista(&listaIO, (*tempIO)->processo.pid);
-                        break;
-                    case FITA:
-                        inserirProcesso(&listaAlta, (*tempIO)->processo);
-                        removerProcessoDaLista(&listaIO, (*tempIO)->processo.pid);
-                        break;
-                    case IMPRESSORA:
-                        inserirProcesso(&listaAlta, (*tempIO)->processo);
-                        removerProcessoDaLista(&listaIO, (*tempIO)->processo.pid);
-                        break;
+                printf("[%dms] !- I/O FINALIZADO PID(%d) {%s}\n",
+                    timer,
+                    noProcessoAtual->processo.pid,
+                    TipoIONomes[noProcessoAtual->processo.proximoIO]);
+
+                noProcessoAtual->processo.status = PRONTO;
+
+                if (noProcessoAtual->processo.proximoIO == DISCO) {
+                    noProcessoAtual->processo.proximoIO = NENHUM;
+                    inserirProcesso(&listaBaixa, noProcessoAtual->processo);
+                } else {
+                    // isso serve para FITA e IMPRESSORA
+                    noProcessoAtual->processo.proximoIO = NENHUM;
+                    inserirProcesso(&listaAlta, noProcessoAtual->processo);
                 }
 
-                printf("[%dms] !- I/O FINALIZADO PID(%d) {%d}", timer, (*tempIO)->processo.pid, (*tempIO)->processo.proximoIO);
-                // depois, tem que definir o que os números dos status significam
-                // ou fazem um enum deles também, talvez seria melhor pra ler o código
-                (*tempIO)->processo.status = 0;
+                // aqui, eu to mudando o valor do elemento ao qual tempIO representa na lista, atualizando para o próximo valor
+                *tempIO = noProcessoAtual->proximo;
+                free(noProcessoAtual);
+                // aqui, o tempIO ainda aponta pro mesmo index da lista que apontava antes, mas ele altera quem esse index representa
+
+            } else {
+                // aqui, eu to mudando pra quem o tempIO aponta
+                tempIO = &(noProcessoAtual->proximo);
             }
-            tempIO = &((*tempIO)->proximo);
         }
 
 
         No *tempAlta = listaAlta;
         while(tempAlta != NULL) {
+            No *proximoItemAlto = tempAlta->proximo;
             executarProcesso(&(tempAlta->processo), &listaAlta, &listaIO, quantum, &timer);
-            tempAlta = tempAlta->proximo;
+            tempAlta = proximoItemAlto;
         }
 
         if (listaAlta == NULL) {
             No *tempBaixa = listaBaixa;
             while(tempBaixa != NULL) {
+                No* proximoItemBaixo = tempBaixa->proximo;
                 executarProcesso(&(tempBaixa->processo), &listaBaixa, &listaIO, quantum, &timer);
-                tempBaixa = tempBaixa->proximo;
+                tempBaixa = proximoItemBaixo;
             }
         }
 
@@ -243,5 +301,7 @@ int main () {
             listaIO == NULL) {
             existemProcessosNaoFinalizados = false;
         }
+
+        printf("#- FIM DO LOOP -> %d (debug)\n", timer);
     }
 }
