@@ -28,7 +28,27 @@ typedef struct {
     int tempoInicioIO;
     // int prioridade;
     Status status;
+
+    // itens de estatistica abaixo
+    int tempoChegada;
+    int tempoFinalizacao;
+    int tempoTotalEspera;
+    int tempoUltimaEntradaPronto;
 } Processo;
+
+typedef struct {
+    int tempoTotal;
+    int quantidadePreempcoes;
+
+    int eventosIO[4];
+
+    int tempoTotalEspera;
+    int tempoTotalRetorno;
+
+    int quantidadeProcessos;
+
+    int tempoCPUOciosa;
+} Estatisticas;
 
 
 void imprimirProcesso(Processo *p) {
@@ -118,7 +138,41 @@ void removerProcessoDaLista(No* *inicio, int pid) {
     }
 }
 
-void executarProcesso(Processo* processo, No* *lista, No* *listaIO, int quantum, int *timer, const char *tipoIONomes[]) {
+void imprimirEstatisticas(Estatisticas *estatisticas) {
+    printf("\n========== ESTATISTICAS FINAIS ==========\n");
+    printf("Tempo total da simulacao: %d unidades\n", estatisticas->tempoTotal);
+    printf("Processos finalizados: %d\n", estatisticas->quantidadeProcessos);
+    printf("Quantidade de preempcoes: %d\n", estatisticas->quantidadePreempcoes);
+
+    printf("\nEventos de I/O:\n");
+    printf("  Disco: %d\n", estatisticas->eventosIO[DISCO]);
+    printf("  Fita: %d\n", estatisticas->eventosIO[FITA]);
+    printf("  Impressora: %d\n", estatisticas->eventosIO[IMPRESSORA]);
+
+    if (estatisticas->quantidadeProcessos > 0) {
+        printf("\nTempo medio de espera: %.2f unidades\n",
+            (double) estatisticas->tempoTotalEspera / estatisticas->quantidadeProcessos);
+        printf("Tempo medio de turnaround: %.2f unidades\n",
+            (double) estatisticas->tempoTotalRetorno / estatisticas->quantidadeProcessos);
+    } else {
+        printf("\nTempo medio de espera: 0.00 unidades\n");
+        printf("Tempo medio de turnaround: 0.00 unidades\n");
+    }
+
+    if (estatisticas->tempoTotal > 0) {
+        double percentualOcioso =
+            100.0 * estatisticas->tempoCPUOciosa / estatisticas->tempoTotal;
+        printf("Tempo de CPU ociosa: %d unidades (%.2f%%)\n",
+            estatisticas->tempoCPUOciosa, percentualOcioso);
+    } else {
+        printf("Tempo de CPU ociosa: 0 unidades (0.00%%)\n");
+    }
+    printf("=========================================\n");
+}
+
+void executarProcesso(Processo* processo, No* *lista, No* *listaIO, int quantum, int *timer, const char *tipoIONomes[], Estatisticas *estatisticas) {
+    // Ao ser escolhido para executar, o processo deixa de esperar na fila de prontos.
+    processo->tempoTotalEspera += *timer - processo->tempoUltimaEntradaPronto;
     processo->status = EXECUTANDO;
 
     int diferencaDeTempoAteIO =  (*processo).tempoAteIO - quantum;
@@ -145,6 +199,7 @@ void executarProcesso(Processo* processo, No* *lista, No* *listaIO, int quantum,
             tempoAdicionado);
 
         processo->tempoInicioIO = *timer;
+        estatisticas->eventosIO[processo->proximoIO]++;
         inserirProcesso(listaIO, *processo);
 
         removerProcessoDaLista(lista, (*processo).pid);
@@ -166,9 +221,15 @@ void executarProcesso(Processo* processo, No* *lista, No* *listaIO, int quantum,
 
     if ((*processo).tempoRestante <= 0) {
         (*processo).status = FINALIZADO;
+        processo->tempoFinalizacao = *timer;
+        estatisticas->quantidadeProcessos++;
+        estatisticas->tempoTotalEspera += processo->tempoTotalEspera;
+        estatisticas->tempoTotalRetorno += processo->tempoFinalizacao - processo->tempoChegada;
         removerProcessoDaLista(lista, (*processo).pid);
     } else {
-        // registrar preemptação
+        estatisticas->quantidadePreempcoes++;
+        // o processo continua pronto e vai voltar a esperar a partir deste instante.
+        processo->tempoUltimaEntradaPronto = *timer;
     }
 }
 
@@ -215,7 +276,12 @@ void inicializarProcessos(int quantidadeDeProcessos, No* *filaAAdicionar, int *p
 
         int sorteioTempo = 2 + rand() % 14;
 
-        Processo novoProcesso = {*pidCount, sorteioTempo, 0, 0, 0, 0, NOVO};
+        Processo novoProcesso = {0};
+        novoProcesso.pid = *pidCount;
+        novoProcesso.tempoRestante = sorteioTempo;
+        novoProcesso.status = PRONTO;
+        novoProcesso.tempoChegada = 0;
+        novoProcesso.tempoUltimaEntradaPronto = 0;
         inserirProximoIOeTempoDeIO(&novoProcesso);
 
         inserirProcesso(filaAAdicionar, novoProcesso);
@@ -223,7 +289,7 @@ void inicializarProcessos(int quantidadeDeProcessos, No* *filaAAdicionar, int *p
 }
 
 int main () {
-    // coloquei esse print só pra separar os comandos do meu console
+    srand(time(NULL));
     printf("\n-- RoundRobin iniciado --\n");
     const char* TipoIONomes[] = {
         "NENHUM",
@@ -238,6 +304,7 @@ int main () {
         "BLOQUEADO",
         "FINALIZADO"
     };
+    Estatisticas estatisticasDoAlgoritmo = {0};
 
 
     int pidCounter = -1;
@@ -259,6 +326,12 @@ int main () {
 
     bool existemProcessosNaoFinalizados = true;
     while(existemProcessosNaoFinalizados) {
+        // Se nao existe processo pronto, a CPU fica ociosa enquanto os I/Os avancam.
+        if (listaAlta == NULL && listaBaixa == NULL && listaIO != NULL) {
+            timer += quantum;
+            estatisticasDoAlgoritmo.tempoCPUOciosa += quantum;
+        }
+
         No* *tempIO = &listaIO;
 
         while(*tempIO != NULL) {
@@ -283,6 +356,7 @@ int main () {
                 );
 
                 noProcessoAtual->processo.status = PRONTO;
+                noProcessoAtual->processo.tempoUltimaEntradaPronto = timer;
 
                 if (noProcessoAtual->processo.proximoIO == DISCO) {
                     inserirProximoIOeTempoDeIO(&(noProcessoAtual->processo));
@@ -308,7 +382,7 @@ int main () {
         No *tempAlta = listaAlta;
         while(tempAlta != NULL) {
             No *proximoItemAlto = tempAlta->proximo;
-            executarProcesso(&(tempAlta->processo), &listaAlta, &listaIO, quantum, &timer, TipoIONomes);
+            executarProcesso(&(tempAlta->processo), &listaAlta, &listaIO, quantum, &timer, TipoIONomes, &estatisticasDoAlgoritmo);
             tempAlta = proximoItemAlto;
         }
 
@@ -316,7 +390,7 @@ int main () {
             No *tempBaixa = listaBaixa;
             while(tempBaixa != NULL) {
                 No* proximoItemBaixo = tempBaixa->proximo;
-                executarProcesso(&(tempBaixa->processo), &listaBaixa, &listaIO, quantum, &timer, TipoIONomes);
+                executarProcesso(&(tempBaixa->processo), &listaBaixa, &listaIO, quantum, &timer, TipoIONomes, &estatisticasDoAlgoritmo);
                 tempBaixa = proximoItemBaixo;
             }
         }
@@ -328,6 +402,9 @@ int main () {
             existemProcessosNaoFinalizados = false;
         }
 
-        printf("#- FIM DO LOOP -> %d (debug)\n", timer);
+        printf("#- FIM DO LOOP -> %d (debug)\n\n", timer);
     }
+
+    estatisticasDoAlgoritmo.tempoTotal = timer;
+    imprimirEstatisticas(&estatisticasDoAlgoritmo);
 }
