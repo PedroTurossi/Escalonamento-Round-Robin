@@ -35,7 +35,7 @@ A fila de alta prioridade é atendida primeiro. A fila de baixa prioridade somen
 
 ---
 
-## Como executar o projeto
+# Como executar o projeto
 
 É necessário possuir um compilador C, como o GCC, instalado no sistema.
 
@@ -79,6 +79,17 @@ Após a compilação, execute o programa gerado dentro da pasta `build`:
 ```
 
 *Observação: o caminho do executável pode variar conforme a configuração do `CMakeLists.txt`.*
+
+## Como executar com Docker
+
+É necessário ter o Docker instalado (no Windows, o Docker Desktop com WSL 2).
+
+Na raiz do projeto, execute:
+
+```bash
+docker build -t so-escalonador .
+docker run --rm so-escalonador
+```
 
 ---
 
