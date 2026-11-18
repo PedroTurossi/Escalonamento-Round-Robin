@@ -232,7 +232,7 @@ void executarProcesso(Processo* processo, No* *lista, No* *listaIO, int quantum,
 
 // nas duas funções abaixo, tem elementos gerados aleatoriamente
 void inserirProximoIOeTempoDeIO(Processo* processo) {
-    srand(time(NULL));
+    // srand(time(NULL));
     int tempoRestante = processo->tempoRestante;
     int tempoAteIO = 0;
     int tempoDeIO = 0;
@@ -266,7 +266,7 @@ void inserirProximoIOeTempoDeIO(Processo* processo) {
     processo->tempoIO = tempoDeIO;
 }
 void inicializarProcessos(int quantidadeDeProcessos, No* *filaAAdicionar, int *pidCount) {
-    srand(time(NULL));
+    // srand(time(NULL));
     for (int i = 0; i < quantidadeDeProcessos; i++) {
         (*pidCount)++;
 
